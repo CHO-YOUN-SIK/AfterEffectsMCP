@@ -1,0 +1,8 @@
+<ExtensionList>
+    <Extension Id="com.my.aemcp.panel">
+        <HostList>
+            <Host Name="PHXS" Port="8088"/>
+            <Host Name="AEFT" Port="8088"/>
+        </HostList>
+    </Extension>
+</ExtensionList>

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>AfterEffects MCP</title>
+    <style>
+        body { font-family: sans-serif; background: #232323; color: #fff; margin: 0; padding: 10px; display: flex; flex-direction: column; height: 95vh; }
+        #api-section { margin-bottom: 10px; padding: 10px; background: #333; border-radius: 5px; }
+        input[type="password"], input[type="text"] { width: 100%; padding: 8px; margin-top: 5px; background: #444; border: 1px solid #555; color: #fff; box-sizing: border-box;}
+        #chat-container { flex: 1; overflow-y: auto; background: #1a1a1a; padding: 10px; border-radius: 5px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 10px; }
+        .message { padding: 8px 12px; border-radius: 10px; max-width: 80%; word-wrap: break-word; }
+        .user-msg { background: #0078d7; align-self: flex-end; }
+        .bot-msg { background: #3a3a3a; align-self: flex-start; }
+        .status-log { font-size: 0.8em; color: #aaa; margin-left: 5px; font-style: italic; }
+        #input-area { display: flex; gap: 5px; }
+        button { padding: 10px; background: #0078d7; color: white; border: none; cursor: pointer; border-radius: 4px; }
+        button:hover { background: #005a9e; }
+    </style>
+</head>
+<body>
+
+    <div id="api-section">
+        <label>Gemini API Key:</label>
+        <input type="password" id="apiKeyInput" placeholder="Enter your API Key here...">
+    </div>
+
+    <div id="chat-container">
+        <div class="message bot-msg">안녕하세요! 무엇을 도와드릴까요? (예: "텍스트 레이어 만들어줘", "바다 이미지 생성해서 넣어줘")</div>
+    </div>
+
+    <div id="input-area">
+        <input type="text" id="promptInput" placeholder="프롬프트를 입력하세요...">
+        <button id="sendBtn">전송</button>
+    </div>
+
+    <script src="../lib/CSInterface.js"></script>
+    <script src="main.js"></script>
+</body>
+</html>

@@ -110,10 +110,18 @@ sendBtn.addEventListener('click', async () => {
 
             const data = await response.json();
 
+            // --- 에러 처리 로직 개선 ---
+            // 1. 서버 전체 에러 (예: API 키 오류 등)
             if (data.error) {
-                addMessage(`Error: ${data.error}`);
+                addMessage(`Server Error: ${data.error}`);
                 return;
             }
+            // 2. 작업 수행 중 에러 (예: 이미지 생성 실패, 라이브러리 미설치 등)
+            if (data.status === 'error') {
+                addMessage(`Task Error: ${data.message}`); // 이제 "undefined" 대신 진짜 에러 내용이 보일 겁니다.
+                return;
+            }
+            // ---------------------------
 
             addStatus(data.log);
 

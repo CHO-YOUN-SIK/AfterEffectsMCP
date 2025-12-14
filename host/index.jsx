@@ -1,3 +1,9 @@
+/**
+ * After Effects 프로젝트의 현재 상태 정보를 수집하는 함수
+ * 활성화된 컴포지션과 선택된 레이어 정보를 JSON 형태로 반환
+ * 
+ * @returns {string} JSON 문자열 형태의 컨텍스트 정보
+ */
 function getProjectContext() {
     var context = {
         hasActiveComp: false,
@@ -27,7 +33,7 @@ function getProjectContext() {
             context.selectedLayers.push({
                 index: layer.index,
                 name: layer.name,
-                type: getLayerType(layer), // 아래 헬퍼 함수 참고
+                type: getLayerType(layer),
                 width: layer.width,
                 height: layer.height,
                 position: layer.transform.position.value.toString(),
@@ -36,27 +42,40 @@ function getProjectContext() {
         }
     }
 
-    // 객체를 문자열(JSON)로 변환하여 리턴
+    // 객체를 JSON 문자열로 변환하여 반환
     return JSON.stringify(context);
 }
 
-// 레이어 타입을 구분하는 헬퍼 함수
+/**
+ * 레이어의 타입을 구분하는 헬퍼 함수
+ * 
+ * @param {Layer} layer - After Effects 레이어 객체
+ * @returns {string} 레이어 타입 문자열
+ */
 function getLayerType(layer) {
     if (layer instanceof TextLayer) return "TextLayer";
     if (layer instanceof CameraLayer) return "CameraLayer";
     if (layer instanceof LightLayer) return "LightLayer";
     if (layer instanceof ShapeLayer) return "ShapeLayer";
     if (layer.nullLayer) return "NullLayer";
-    return "AVLayer";
+    return "AVLayer"; // Audio/Video Layer
 }
 
+/**
+ * 클라이언트로부터 받은 스크립트 코드를 실행하는 함수
+ * 
+ * @param {string} code - 실행할 ExtendScript 코드
+ * @returns {string} 실행 결과 ("Success" 또는 "Error")
+ */
 function runScript(code) {
     try {
         // 전달받은 문자열 코드를 실행
         eval(code);
         return "Success";
     } catch (e) {
+        // 에러 발생 시 사용자에게 알림
         alert("Script Error: " + e.toString());
         return "Error";
     }
 }
+

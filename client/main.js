@@ -10,17 +10,56 @@ const SERVER_URL = 'http://127.0.0.1:5000';
 function startPythonServer() {
     const extensionRoot = csInterface.getSystemPath(SystemPath.EXTENSION);
     const serverPath = path.join(extensionRoot, 'server', 'server.py');
-    
-    // python 또는 python3 명령어로 실행
-    pythonProcess = spawn('python', [serverPath]);
 
-    pythonProcess.stdout.on('data', (data) => {
-        console.log(`Python Server: ${data}`);
-    });
+    // Python 명령어 후보들 (시스템별로 다를 수 있음)
+    const pythonCommands = ['python', 'python3', 'py'];
+    let serverStarted = false;
 
-    pythonProcess.stderr.on('data', (data) => {
-        console.error(`Python Error: ${data}`);
-    });
+    function tryStartServer(cmdIndex) {
+        if (cmdIndex >= pythonCommands.length) {
+            // 모든 시도 실패
+            addStatus('❌ Python 서버 시작 실패');
+            addMessage('Python이 설치되어 있는지 확인해주세요. (python, python3, py 명령어를 찾을 수 없습니다)', false);
+            return;
+        }
+
+        const cmd = pythonCommands[cmdIndex];
+        console.log(`[INFO] Python 서버 시작 시도: ${cmd}`);
+
+        pythonProcess = spawn(cmd, [serverPath]);
+
+        pythonProcess.stdout.on('data', (data) => {
+            const message = data.toString();
+            console.log(`Python Server: ${message}`);
+
+            // 서버 시작 성공 메시지 확인
+            if (message.includes('Running on') || message.includes('서버 시작')) {
+                serverStarted = true;
+                addStatus('✅ Python 서버 연결 완료');
+            }
+        });
+
+        pythonProcess.stderr.on('data', (data) => {
+            const errorMsg = data.toString();
+            console.error(`Python Error: ${errorMsg}`);
+
+            // 명령어를 찾을 수 없는 경우 다음 시도
+            if (!serverStarted && (errorMsg.includes('not found') || errorMsg.includes('not recognized'))) {
+                console.log(`[INFO] ${cmd} 명령어 실패, 다음 시도...`);
+                pythonProcess = null;
+                tryStartServer(cmdIndex + 1);
+            }
+        });
+
+        pythonProcess.on('error', (err) => {
+            console.error(`[ERROR] Python 프로세스 오류: ${err}`);
+            if (!serverStarted) {
+                tryStartServer(cmdIndex + 1);
+            }
+        });
+    }
+
+    tryStartServer(0);
 }
 
 // 패널 종료 시 서버도 종료
@@ -75,7 +114,7 @@ sendBtn.addEventListener('click', async () => {
 
     // 2. AE에서 현재 상태 정보(Context) 가져오기
     csInterface.evalScript('getProjectContext()', async (contextResult) => {
-        
+
         // AE에서 가져온 JSON 정보를 파싱 (디버깅용)
         let contextJson = {};
         try {
@@ -113,12 +152,22 @@ sendBtn.addEventListener('click', async () => {
             // --- 에러 처리 로직 개선 ---
             // 1. 서버 전체 에러 (예: API 키 오류 등)
             if (data.error) {
-                addMessage(`Server Error: ${data.error}`);
+                addMessage(`❌ 서버 오류: ${data.error}`, false);
+                if (data.details) {
+                    addMessage(`상세: ${data.details}`, false);
+                }
+                if (data.suggestion) {
+                    addMessage(`💡 제안: ${data.suggestion}`, false);
+                }
                 return;
             }
+
             // 2. 작업 수행 중 에러 (예: 이미지 생성 실패, 라이브러리 미설치 등)
             if (data.status === 'error') {
-                addMessage(`Task Error: ${data.message}`); // 이제 "undefined" 대신 진짜 에러 내용이 보일 겁니다.
+                addMessage(`❌ 작업 오류: ${data.message}`, false);
+                if (data.details) {
+                    addMessage(`상세: ${data.details}`, false);
+                }
                 return;
             }
             // ---------------------------
@@ -126,12 +175,54 @@ sendBtn.addEventListener('click', async () => {
             addStatus(data.log);
 
             if (data.code) {
-                addStatus("스크립트 실행 중...");
-                csInterface.evalScript(data.code); // Gemini가 짠 코드 실행
+                // 코드 실행 전 사용자 확인
+                showCodeConfirmation(data.code, data.type);
             }
 
         } catch (e) {
-            addMessage(`Server Error: ${e}`);
+            addMessage(`❌ 네트워크 오류: ${e}`, false);
+            addMessage('Python 서버가 실행 중인지 확인해주세요.', false);
         }
     });
 });
+
+// 코드 실행 확인 UI
+function showCodeConfirmation(code, type) {
+    const confirmDiv = document.createElement('div');
+    confirmDiv.className = 'code-confirmation';
+    confirmDiv.innerHTML = `
+        <div class="code-preview">
+            <strong>🤖 생성된 코드:</strong>
+            <pre>${escapeHtml(code)}</pre>
+        </div>
+        <div class="confirm-buttons">
+            <button class="btn-confirm" id="confirmRun">✅ 실행</button>
+            <button class="btn-cancel" id="confirmCancel">❌ 취소</button>
+        </div>
+    `;
+    chatContainer.appendChild(confirmDiv);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+
+    document.getElementById('confirmRun').addEventListener('click', () => {
+        addStatus("스크립트 실행 중...");
+        csInterface.evalScript(code, (result) => {
+            if (result === "EvalScript error.") {
+                addMessage("⚠️ 스크립트 실행 중 오류가 발생했습니다.", false);
+            } else {
+                addMessage("✅ 스크립트 실행 완료!", false);
+            }
+        });
+        confirmDiv.remove();
+    });
+
+    document.getElementById('confirmCancel').addEventListener('click', () => {
+        addStatus("스크립트 실행 취소됨");
+        confirmDiv.remove();
+    });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}

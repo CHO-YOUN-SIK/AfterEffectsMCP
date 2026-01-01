@@ -1,3 +1,6 @@
+// After Effects 조작 함수 라이브러리 불러오기
+#include "ae-functions.jsx";
+
 /**
  * After Effects 프로젝트의 현재 상태 정보를 수집하는 함수
  * 활성화된 컴포지션과 선택된 레이어 정보를 JSON 형태로 반환
@@ -78,4 +81,91 @@ function runScript(code) {
         return "Error";
     }
 }
+
+/**
+ * 구조화된 명령을 실행하는 함수 (ae-functions.jsx의 함수 호출)
+ * Gemini가 JSON 형태로 명령을 전달하면 해당 함수를 실행
+ * 
+ * @param {string} command - 실행할 명령 이름
+ * @param {Object} args - 명령에 필요한 인자들
+ * @returns {string} JSON 형태의 실행 결과
+ */
+function executeCommand(command, args) {
+    app.beginUndoGroup(command);
+
+    try {
+        var result;
+
+        switch (command) {
+            // 컴포지션 생성
+            case "createComposition":
+                result = createComposition(args);
+                break;
+
+            // 레이어 생성
+            case "createTextLayer":
+                result = createTextLayer(args);
+                break;
+
+            case "createShapeLayer":
+                result = createShapeLayer(args);
+                break;
+
+            case "createSolidLayer":
+                result = createSolidLayer(args);
+                break;
+
+            // 레이어 속성 제어
+            case "setLayerProperties":
+                result = setLayerProperties(args);
+                break;
+
+            case "setLayerKeyframe":
+                // args에서 값 추출
+                result = setLayerKeyframe(
+                    args.compIndex,
+                    args.layerIndex,
+                    args.propertyName,
+                    args.timeInSeconds,
+                    args.value
+                );
+                break;
+
+            case "setLayerExpression":
+                result = setLayerExpression(
+                    args.compIndex,
+                    args.layerIndex,
+                    args.propertyName,
+                    args.expressionString
+                );
+                break;
+
+            // 이펙트
+            case "applyEffect":
+                result = applyEffect(args);
+                break;
+
+            case "applyEffectTemplate":
+                result = applyEffectTemplate(args);
+                break;
+
+            default:
+                result = JSON.stringify({
+                    status: "error",
+                    message: "Unknown command: " + command + ". Available commands: createComposition, createTextLayer, createShapeLayer, createSolidLayer, setLayerProperties, setLayerKeyframe, setLayerExpression, applyEffect, applyEffectTemplate"
+                });
+        }
+
+        app.endUndoGroup();
+        return result;
+
+    } catch (e) {
+        app.endUndoGroup();
+        return JSON.stringify({
+            status: "error",
+            message: "Error executing command '" + command + "': " + e.toString()
+        });
+    }
+}
+
 

@@ -1,146 +1,147 @@
-# After Effectsìš© ExtendScript API ë¬¸ì„œ
+# After Effects ExtendScript & Server API ¹®¼­
 
-ì´ ë¬¸ì„œëŠ” AfterEffectsMCP ê°œë°œìê°€ ì°¸ê³ í•  ìˆ˜ ìˆëŠ” ì£¼ìš” ExtendScript APIë¥¼ ì •ë¦¬í•œ ë¬¸ì„œì…ë‹ˆë‹¤.
+ÀÌ ¹®¼­´Â AfterEffectsMCP °³¹ß¿¡ Âü°íµÇ´Â ExtendScript API¿Í ¼­¹ö API¸¦ Á¤¸®ÇÑ ¹®¼­ÀÔ´Ï´Ù.
 
-## ğŸ“š ëª©ì°¨
+## ¸ñÂ÷
 
-- [ê¸°ë³¸ ê°œë…](#ê¸°ë³¸-ê°œë…)
-- [í”„ë¡œì íŠ¸ ë° ì»´í¬ì§€ì…˜](#í”„ë¡œì íŠ¸-ë°-ì»´í¬ì§€ì…˜)
-- [ë ˆì´ì–´ ì‘ì—…](#ë ˆì´ì–´-ì‘ì—…)
-- [ì†ì„± ë° í‚¤í”„ë ˆì„](#ì†ì„±-ë°-í‚¤í”„ë ˆì„)
-- [í…ìŠ¤íŠ¸ ë ˆì´ì–´](#í…ìŠ¤íŠ¸-ë ˆì´ì–´)
-- [ë„í˜• ë ˆì´ì–´](#ë„í˜•-ë ˆì´ì–´)
+- [±âº» °³³ä](#±âº»-°³³ä)
+- [ÇÁ·ÎÁ§Æ®/ÄÄÆ÷Áö¼Ç](#ÇÁ·ÎÁ§Æ®-ÄÄÆ÷Áö¼Ç)
+- [·¹ÀÌ¾î Á¶ÀÛ](#·¹ÀÌ¾î-Á¶ÀÛ)
+- [¼Ó¼º/Å°ÇÁ·¹ÀÓ](#¼Ó¼º-Å°ÇÁ·¹ÀÓ)
+- [ÅØ½ºÆ® ·¹ÀÌ¾î](#ÅØ½ºÆ®-·¹ÀÌ¾î)
+- [µµÇü ·¹ÀÌ¾î](#µµÇü-·¹ÀÌ¾î)
 - [Undo Group](#undo-group)
-- [ì°¸ê³  ìë£Œ](#ì°¸ê³ -ìë£Œ)
+- [¼­¹ö API](#¼­¹ö-api)
+- [Âü°í ¹®¼­](#Âü°í-¹®¼­)
 
 ---
 
-## ê¸°ë³¸ ê°œë…
+## ±âº» °³³ä
 
-### ExtendScriptë€?
-Adobe After Effectsì˜ ìë™í™” ìŠ¤í¬ë¦½íŠ¸ ì–¸ì–´ (JavaScript ES3 ê¸°ë°˜)
+### ExtendScript¶õ?
+Adobe After Effects ÀÚµ¿È­¸¦ À§ÇÑ ½ºÅ©¸³Æ® ¾ğ¾î (JavaScript ES3 ±â¹İ)
 
 ### Undo Group
-ì‚¬ìš©ìê°€ Ctrl+Zë¡œ ë˜ëŒë¦´ ìˆ˜ ìˆëŠ” ì‘ì—… ë‹¨ìœ„ë¥¼ ì •ì˜í•©ë‹ˆë‹¤.
+ÀÛ¾÷ °á°ú¸¦ Ctrl+Z·Î µÇµ¹¸± ¼ö ÀÖµµ·Ï ¹­´Â ´ÜÀ§ÀÔ´Ï´Ù.
 
 ```javascript
-app.beginUndoGroup("ì‘ì—… ì´ë¦„");
-// ì—¬ê¸°ì— ì½”ë“œ ì‘ì„±
+app.beginUndoGroup("ÀÛ¾÷ ÀÌ¸§");
+// ¿©±â¿¡ ÄÚµå ÀÛ¼º
 app.endUndoGroup();
 ```
 
 ---
 
-## í”„ë¡œì íŠ¸ ë° ì»´í¬ì§€ì…˜
+## ÇÁ·ÎÁ§Æ®/ÄÄÆ÷Áö¼Ç
 
-### í™œì„±í™”ëœ ì»´í¬ì§€ì…˜ ê°€ì ¸ì˜¤ê¸°
+### È°¼º ÄÄÆ÷Áö¼Ç È®ÀÎ
 
 ```javascript
 var comp = app.project.activeItem;
 
 if (comp && comp instanceof CompItem) {
-    // compëŠ” í™œì„±í™”ëœ ì»´í¬ì§€ì…˜
-    alert("ì»´í¬ì§€ì…˜ ì´ë¦„: " + comp.name);
+    // comp´Â È°¼º ÄÄÆ÷Áö¼Ç
+    alert("ÄÄÆ÷Áö¼Ç ÀÌ¸§: " + comp.name);
 }
 ```
 
-### ì»´í¬ì§€ì…˜ ì†ì„±
+### ÄÄÆ÷Áö¼Ç ¼Ó¼º
 
 ```javascript
-comp.name          // ì»´í¬ì§€ì…˜ ì´ë¦„
-comp.width         // ë„ˆë¹„ (í”½ì…€)
-comp.height        // ë†’ì´ (í”½ì…€)
-comp.frameRate     // í”„ë ˆì„ë ˆì´íŠ¸
-comp.duration      // ì´ ê¸¸ì´ (ì´ˆ)
-comp.time          // í˜„ì¬ ì‹œê°„ (ì´ˆ)
+comp.name          // ÄÄÆ÷Áö¼Ç ÀÌ¸§
+comp.width         // ³Êºñ (ÇÈ¼¿)
+comp.height        // ³ôÀÌ (ÇÈ¼¿)
+comp.frameRate     // ÇÁ·¹ÀÓ·¹ÀÌÆ®
+comp.duration      // ±æÀÌ (ÃÊ)
+comp.time          // ÇöÀç ½Ã°£ (ÃÊ)
 ```
 
-### ìƒˆ ì»´í¬ì§€ì…˜ ìƒì„±
+### »õ ÄÄÆ÷Áö¼Ç »ı¼º
 
 ```javascript
 var newComp = app.project.items.addComp("New Comp", 1920, 1080, 1.0, 10, 30);
-// (ì´ë¦„, ë„ˆë¹„, ë†’ì´, í”½ì…€ ë¹„ìœ¨, ê¸¸ì´(ì´ˆ), í”„ë ˆì„ë ˆì´íŠ¸)
+// (ÀÌ¸§, ³Êºñ, ³ôÀÌ, ÇÈ¼¿ ºñÀ², ±æÀÌ(ÃÊ), ÇÁ·¹ÀÓ·¹ÀÌÆ®)
 ```
 
 ---
 
-## ë ˆì´ì–´ ì‘ì—…
+## ·¹ÀÌ¾î Á¶ÀÛ
 
-### ì„ íƒëœ ë ˆì´ì–´ ê°€ì ¸ì˜¤ê¸°
+### ¼±ÅÃµÈ ·¹ÀÌ¾î °¡Á®¿À±â
 
 ```javascript
 var selectedLayers = comp.selectedLayers;
 
 for (var i = 0; i < selectedLayers.length; i++) {
     var layer = selectedLayers[i];
-    alert("ë ˆì´ì–´ ì´ë¦„: " + layer.name);
+    alert("·¹ÀÌ¾î ÀÌ¸§: " + layer.name);
 }
 ```
 
-### ë ˆì´ì–´ ì¸ë±ìŠ¤ë¡œ ì ‘ê·¼
+### ·¹ÀÌ¾î ÀÎµ¦½º·Î Á¢±Ù
 
 ```javascript
-var layer = comp.layer(1); // 1ë²ˆ ë ˆì´ì–´ (1ë¶€í„° ì‹œì‘)
+var layer = comp.layer(1); // 1¹ø ·¹ÀÌ¾î (1ºÎÅÍ ½ÃÀÛ)
 ```
 
-### ìƒˆ ë ˆì´ì–´ ìƒì„±
+### »õ ·¹ÀÌ¾î »ı¼º
 
-#### Solid ë ˆì´ì–´
+#### Solid ·¹ÀÌ¾î
 ```javascript
 var solidLayer = comp.layers.addSolid([1, 0, 0], "Red Solid", 1920, 1080, 1.0);
-// (RGB ìƒ‰ìƒ, ì´ë¦„, ë„ˆë¹„, ë†’ì´, í”½ì…€ ë¹„ìœ¨)
+// (RGB »ö»ó, ÀÌ¸§, ³Êºñ, ³ôÀÌ, ÇÈ¼¿ ºñÀ²)
 ```
 
-#### Null ë ˆì´ì–´
+#### Null ·¹ÀÌ¾î
 ```javascript
 var nullLayer = comp.layers.addNull();
 nullLayer.name = "Control Null";
 ```
 
-#### í…ìŠ¤íŠ¸ ë ˆì´ì–´
+#### ÅØ½ºÆ® ·¹ÀÌ¾î
 ```javascript
 var textLayer = comp.layers.addText("Hello World");
 ```
 
-### ë ˆì´ì–´ ì‚­ì œ
+### ·¹ÀÌ¾î »èÁ¦
 ```javascript
 layer.remove();
 ```
 
 ---
 
-## ì†ì„± ë° í‚¤í”„ë ˆì„
+## ¼Ó¼º/Å°ÇÁ·¹ÀÓ
 
-### Transform ì†ì„± ì ‘ê·¼
+### Transform ¼Ó¼º Á¢±Ù
 
 ```javascript
-layer.transform.position         // ìœ„ì¹˜
-layer.transform.scale            // í¬ê¸°
-layer.transform.rotation         // íšŒì „
-layer.transform.opacity          // ë¶ˆíˆ¬ëª…ë„
-layer.transform.anchorPoint      // ì•µì»¤ í¬ì¸íŠ¸
+layer.transform.position         // À§Ä¡
+layer.transform.scale            // Å©±â
+layer.transform.rotation         // È¸Àü
+layer.transform.opacity          // ºÒÅõ¸íµµ
+layer.transform.anchorPoint      // ¾ŞÄ¿ Æ÷ÀÎÆ®
 ```
 
-### ì†ì„± ê°’ ì„¤ì •
+### ¼Ó¼º °ª ¼³Á¤
 
 ```javascript
-layer.transform.position.setValue([960, 540]);     // ì¤‘ì•™
-layer.transform.opacity.setValue(50);              // 50% ë¶ˆíˆ¬ëª…ë„
-layer.transform.rotation.setValue(45);             // 45ë„ íšŒì „
+layer.transform.position.setValue([960, 540]);     // Áß¾Ó
+layer.transform.opacity.setValue(50);              // 50% ºÒÅõ¸íµµ
+layer.transform.rotation.setValue(45);             // 45µµ È¸Àü
 ```
 
-### í‚¤í”„ë ˆì„ ì¶”ê°€
+### Å°ÇÁ·¹ÀÓ Ãß°¡
 
 ```javascript
-// í˜„ì¬ ì‹œê°„ì— í‚¤í”„ë ˆì„ ì¶”ê°€
+// ÇöÀç ½Ã°£¿¡ Å°ÇÁ·¹ÀÓ Ãß°¡
 layer.transform.position.setValueAtTime(comp.time, [960, 540]);
 
-// 0ì´ˆì™€ 2ì´ˆì— í‚¤í”„ë ˆì„ ì¶”ê°€ (ì• ë‹ˆë©”ì´ì…˜)
-layer.transform.opacity.setValueAtTime(0, 0);      // 0ì´ˆ: íˆ¬ëª…
-layer.transform.opacity.setValueAtTime(2, 100);    // 2ì´ˆ: ë¶ˆíˆ¬ëª…
+// 0ÃÊ ¡æ 2ÃÊ Å°ÇÁ·¹ÀÓ
+layer.transform.opacity.setValueAtTime(0, 0);
+layer.transform.opacity.setValueAtTime(2, 100);
 ```
 
-### í‚¤í”„ë ˆì„ ë³´ê°„ ì„¤ì •
+### Å°ÇÁ·¹ÀÓ º¸°£ ¼³Á¤
 
 ```javascript
 // Linear
@@ -152,18 +153,18 @@ layer.transform.position.setTemporalEaseAtKey(1, [new KeyframeEase(0, 33.33)], [
 
 ---
 
-## í…ìŠ¤íŠ¸ ë ˆì´ì–´
+## ÅØ½ºÆ® ·¹ÀÌ¾î
 
-### í…ìŠ¤íŠ¸ ìƒì„± ë° ìˆ˜ì •
+### ÅØ½ºÆ® ¼Ó¼º º¯°æ
 
 ```javascript
 var textLayer = comp.layers.addText("Hello World");
 var textProp = textLayer.property("Source Text");
 var textDocument = textProp.value;
 
-textDocument.text = "ìƒˆë¡œìš´ í…ìŠ¤íŠ¸";
+textDocument.text = "»õ·Î¿î ÅØ½ºÆ®";
 textDocument.fontSize = 72;
-textDocument.fillColor = [1, 0, 0];  // ë¹¨ê°„ìƒ‰ (RGB 0-1)
+textDocument.fillColor = [1, 0, 0];  // »¡°£»ö (RGB 0-1)
 textDocument.font = "Arial";
 textDocument.applyStroke = true;
 textDocument.strokeColor = [0, 0, 0];
@@ -172,25 +173,25 @@ textDocument.strokeWidth = 5;
 textProp.setValue(textDocument);
 ```
 
-### í…ìŠ¤íŠ¸ ì •ë ¬
+### ÅØ½ºÆ® Á¤·Ä
 
 ```javascript
-textDocument.justification = ParagraphJustification.CENTER_JUSTIFY;  // ì¤‘ì•™
-// LEFT_JUSTIFY, RIGHT_JUSTIFYë„ ê°€ëŠ¥
+textDocument.justification = ParagraphJustification.CENTER_JUSTIFY;  // Áß¾Ó
+// LEFT_JUSTIFY, RIGHT_JUSTIFYµµ °¡´É
 ```
 
 ---
 
-## ë„í˜• ë ˆì´ì–´
+## µµÇü ·¹ÀÌ¾î
 
-### Shape Layer ìƒì„±
+### Shape Layer »ı¼º
 
 ```javascript
 var shapeLayer = comp.layers.addShape();
 shapeLayer.name = "My Shape";
 ```
 
-### ì‚¬ê°í˜• ì¶”ê°€
+### µµÇü Ãß°¡
 
 ```javascript
 var shapeGroup = shapeLayer.property("Contents").addProperty("ADBE Vector Group");
@@ -199,7 +200,7 @@ var fill = shapeGroup.property("Contents").addProperty("ADBE Vector Graphic - Fi
 var stroke = shapeGroup.property("Contents").addProperty("ADBE Vector Graphic - Stroke");
 
 rect.property("Size").setValue([200, 100]);
-fill.property("Color").setValue([0, 0.5, 1]);  // íŒŒë€ìƒ‰
+fill.property("Color").setValue([0, 0.5, 1]);  // ÆÄ¶õ»ö
 stroke.property("Color").setValue([1, 1, 1]);
 stroke.property("Stroke Width").setValue(5);
 ```
@@ -208,17 +209,16 @@ stroke.property("Stroke Width").setValue(5);
 
 ## Undo Group
 
-ëª¨ë“  ìŠ¤í¬ë¦½íŠ¸ëŠ” Undo Groupìœ¼ë¡œ ê°ì‹¸ëŠ” ê²ƒì´ ê¶Œì¥ë©ë‹ˆë‹¤.
+¸ğµç ½ºÅ©¸³Æ®´Â Undo GroupÀ¸·Î °¨½Î´Â °ÍÀÌ ±ÇÀåµË´Ï´Ù.
 
 ```javascript
 app.beginUndoGroup("My Script Action");
 
 try {
-    // ì‹¤ì œ ì‘ì—… ì½”ë“œ
     var comp = app.project.activeItem;
     var layer = comp.layers.addText("Test");
     layer.transform.position.setValue([960, 540]);
-    
+
 } catch (e) {
     alert("Error: " + e.toString());
 }
@@ -228,9 +228,9 @@ app.endUndoGroup();
 
 ---
 
-## ìœ ìš©í•œ íŒ¨í„´
+## »ç¿ë ÆĞÅÏ
 
-### ì»´í¬ì§€ì…˜ ì¡´ì¬ í™•ì¸
+### ÄÄÆ÷Áö¼Ç Á¸Àç È®ÀÎ
 
 ```javascript
 app.beginUndoGroup("Safe Script");
@@ -238,24 +238,23 @@ app.beginUndoGroup("Safe Script");
 var comp = app.project.activeItem;
 
 if (!comp || !(comp instanceof CompItem)) {
-    alert("í™œì„±í™”ëœ ì»´í¬ì§€ì…˜ì´ ì—†ìŠµë‹ˆë‹¤!");
+    alert("È°¼º ÄÄÆ÷Áö¼ÇÀÌ ¾ø½À´Ï´Ù!");
     app.endUndoGroup();
-    // ìŠ¤í¬ë¦½íŠ¸ ì¢…ë£Œ
+    // ½ºÅ©¸³Æ® Á¾·á
 }
 
-// ì•ˆì „í•˜ê²Œ ì‘ì—… ì§„í–‰
 comp.layers.addText("Hello");
 
 app.endUndoGroup();
 ```
 
-### ì„ íƒëœ ë ˆì´ì–´ í™•ì¸
+### ¼±ÅÃ ·¹ÀÌ¾î È®ÀÎ
 
 ```javascript
 var selectedLayers = comp.selectedLayers;
 
 if (selectedLayers.length === 0) {
-    alert("ë ˆì´ì–´ë¥¼ ì„ íƒí•´ì£¼ì„¸ìš”!");
+    alert("·¹ÀÌ¾î¸¦ ¼±ÅÃÇØÁÖ¼¼¿ä!");
 } else {
     for (var i = 0; i < selectedLayers.length; i++) {
         selectedLayers[i].transform.opacity.setValue(50);
@@ -265,7 +264,51 @@ if (selectedLayers.length === 0) {
 
 ---
 
-## ì°¸ê³  ìë£Œ
+## ¼­¹ö API
+
+### POST /crawl-product
+Á¦Ç° »ó¼¼ ÆäÀÌÁö¿¡¼­ Á¤º¸¸¦ ¼öÁıÇÕ´Ï´Ù.
+
+**Request**
+```json
+{
+  "url": "https://global.amoremall.com/products/..."
+}
+```
+
+**Response (success)**
+```json
+{
+  "status": "success",
+  "product": {
+    "url": "...",
+    "name": "...",
+    "description": "...",
+    "price": "...",
+    "currency": "...",
+    "brand": "...",
+    "sku": "...",
+    "benefits": ["...", "..."],
+    "images": ["...", "..."]
+  }
+}
+```
+
+**Response (error)**
+```json
+{
+  "status": "error",
+  "message": "Failed to fetch product page",
+  "details": "..."
+}
+```
+
+### POST /chat
+ÀÚ¿¬¾î ÇÁ·ÒÇÁÆ®¸¦ ExtendScript ÄÚµå·Î º¯È¯ÇÕ´Ï´Ù.
+
+---
+
+## Âü°í ¹®¼­
 
 - [Adobe ExtendScript Toolkit](https://www.adobe.com/devnet/scripting.html)
 - [After Effects Scripting Guide](https://ae-scripting.docsforadobe.dev/)
@@ -273,4 +316,5 @@ if (selectedLayers.length === 0) {
 
 ---
 
-ì´ ë¬¸ì„œëŠ” AfterEffectsMCP í”„ë¡œì íŠ¸ì˜ ì¼ë¶€ì…ë‹ˆë‹¤.
+ÀÌ ¹®¼­´Â AfterEffectsMCP ÇÁ·ÎÁ§Æ®ÀÇ Âü°í ¹®¼­ÀÔ´Ï´Ù.
+

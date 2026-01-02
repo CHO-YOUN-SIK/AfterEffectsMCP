@@ -14,6 +14,9 @@ server/temp_images/
 # 환경 변수
 .env
 
+# API 키 설정 파일
+client/config.json
+
 # 로그
 *.log
 

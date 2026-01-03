@@ -27,10 +27,20 @@ let conversationState = {
 };
 
 // ==================== Python Server Management ====================
+// ==================== Python Server Management ====================
+// ==================== Python Server Management ====================
 let isServerConnected = false;
+let isStartingServer = false; // 중복 실행 방지 플래그
 let connectionCheckInterval = null;
 
 function updateConnectionStatus(connected) {
+    // 상태 표시기 업데이트
+    const statusDot = document.getElementById('server-status-dot');
+    if (statusDot) {
+        statusDot.className = 'status-dot ' + (connected ? 'connected' : 'disconnected');
+        statusDot.title = connected ? '서버 연결됨' : '서버 연결 끊김';
+    }
+
     if (isServerConnected === connected) return;
 
     isServerConnected = connected;
@@ -38,9 +48,18 @@ function updateConnectionStatus(connected) {
 
     if (connected) {
         if (existingError) existingError.remove();
-        addSystemMessage('✅ Python 서버에 연결되었습니다.');
+        console.log(`✅ Connected to Python server at ${SERVER_URL}`);
+
+        // 최초 연결 시에만 환영 메시지 업데이트 (선택 사항)
+        const welcomeMsg = document.querySelector('.system-msg');
+        if (welcomeMsg && welcomeMsg.textContent.includes('준비가 되었습니다')) {
+            welcomeMsg.innerHTML = '👋 안녕하세요! After Effects 작업을 도와드릴 준비가 되었습니다.<br><small style="color:#4caf50">✅ 서버 연결됨</small>';
+        }
+
+        isStartingServer = false;
+        serverStartAttempts = 0;
     } else {
-        // Only show error if not already showing
+        // ... 기존 에러 메시지 로직 유지 ...
         if (!existingError && !document.querySelector('.server-connecting')) {
             const msgDiv = document.createElement('div');
             msgDiv.id = 'server-error-msg';
@@ -48,9 +67,7 @@ function updateConnectionStatus(connected) {
             msgDiv.style.color = '#ff6b6b';
             msgDiv.innerHTML = `
                 ⚠️ 서버 연결 끊김<br>
-                자동 실행을 시도 중입니다...<br>
-                연결되지 않으면 터미널에서 직접 실행해주세요:<br>
-                <code style="background:#333;padding:2px 4px;border-radius:3px;">python server.py</code>
+                자동 실행을 시도 중입니다...
             `;
             chatContainer.appendChild(msgDiv);
             scrollToBottom();
@@ -58,156 +75,189 @@ function updateConnectionStatus(connected) {
     }
 }
 
+// 연결 시도 중 상태 표시
+function setConnectingStatus() {
+    const statusDot = document.getElementById('server-status-dot');
+    if (statusDot) {
+        statusDot.className = 'status-dot connecting';
+        statusDot.title = '서버 연결/시작 중...';
+    }
+}
+
+// 헬스 체크 함수 (타임아웃 단축: 200ms)
+async function checkHealth(url) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 200); // 0.2초 타임아웃
+
+    try {
+        const response = await fetch(`${url}/health`, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        return response.ok;
+    } catch (e) {
+        clearTimeout(timeoutId);
+        console.log(`Health check failed for ${url}:`, e.message); // 디버깅용 로그
+        return false;
+    }
+}
+
 function checkServerConnection() {
-    fetch(`${SERVER_URL}/health`)
-        .then(response => {
-            if (response.ok) {
-                updateConnectionStatus(true);
-            } else {
-                updateConnectionStatus(false);
-            }
-        })
-        .catch(() => {
+    // 서버 시작 중이거나 이미 연결된 경우 체크 스킵 (단, 연결 끊김 감지를 위해 연결 상태면 체크)
+    if (isStartingServer) return;
+
+    checkHealth(SERVER_URL).then(isOk => {
+        if (isOk) {
+            updateConnectionStatus(true);
+        } else {
             updateConnectionStatus(false);
-            // If connection fails, try to start the server again if not already running
-            if (!pythonProcess) {
-                startPythonServer();
+            // 프로세스가 없는데 연결도 안되면 시작 시도
+            if (!pythonProcess && !isStartingServer) {
+                findOrStartServer();
             }
-        });
+        }
+    });
+}
+
+// 활성 서버 찾기 또는 시작
+async function findOrStartServer() {
+    if (pythonProcess || isStartingServer) return; // 이미 우리가 띄운 프로세스가 있거나 시작 중이면 패스
+    isStartingServer = true;
+    setConnectingStatus(); // 상태 표시기: 연결/시작 중
+
+    // console.log('Searching for active Python server...');
+
+    // 1. 활성 서버 병렬 스캔 (모든 포트 동시 검사)
+    const scanPromises = [];
+    for (let port = PORT_RANGE_START; port <= PORT_RANGE_END; port++) {
+        scanPromises.push(
+            checkHealth(`http://127.0.0.1:${port}`).then(isAlive => ({ port, isAlive }))
+        );
+    }
+
+    // 모든 포트 검사를 동시에 진행하여 시간 단축
+    const results = await Promise.all(scanPromises);
+    const activeServer = results.find(r => r.isAlive);
+
+    if (activeServer) {
+        console.log(`✅ Found active server on port ${activeServer.port}`);
+        SERVER_PORT = activeServer.port;
+        SERVER_URL = `http://127.0.0.1:${activeServer.port}`;
+        updateConnectionStatus(true);
+        // isStartingServer = false; // updateConnectionStatus 내부에서 처리됨
+        return;
+    }
+
+    console.log('No active server found. Starting new instance...');
+    startPythonServer();
 }
 
 function startPythonServer() {
-    // If we already have a running process, don't start another
     if (pythonProcess) {
-        console.log('Python process already running, skipping start');
+        isStartingServer = false;
+        return;
+    }
+
+    // 중복 시도 방지: 이미 MAX에 도달했으면 더 이상 시도하지 않음
+    if (serverStartAttempts > MAX_START_ATTEMPTS) {
+        console.log('Max server start attempts reached.');
+        // 이미 에러 메시지가 있는지 확인 후 없으면 추가
+        if (!document.getElementById('server-start-failed-msg')) {
+            const msgDiv = document.createElement('div');
+            msgDiv.id = 'server-start-failed-msg';
+            msgDiv.className = 'message system-msg';
+            msgDiv.style.color = '#ff6b6b';
+            msgDiv.innerHTML = '⚠️ 서버 자동 시작 실패. 수동으로 서버를 시작해주세요.';
+            chatContainer.appendChild(msgDiv);
+            scrollToBottom();
+        }
+        isStartingServer = false; // 플래그 해제하여 나중에 다시 시도 가능하게 함 (선택 사항)
         return;
     }
 
     serverStartAttempts++;
-    if (serverStartAttempts > MAX_START_ATTEMPTS) {
-        console.log('Max server start attempts reached. Please start server manually.');
-        addSystemMessage('⚠️ 서버 자동 시작 실패. 수동으로 서버를 시작해주세요.');
+
+    const extensionPath = csInterface.getSystemPath('extension');
+    const serverPath = path.join(extensionPath, 'server');
+    const batchFile = path.join(extensionPath, 'start_server.bat');
+
+    // 배치 파일 존재 확인
+    if (!fs.existsSync(batchFile)) {
+        console.error(`Batch file not found: ${batchFile}`);
+        addSystemMessage('❌ start_server.bat 파일이 없습니다.');
+        isStartingServer = false;
         return;
     }
 
-    // 서버 경로 설정 (CSInterface 기준)
-    const extensionPath = csInterface.getSystemPath('extension');
-    const serverPath = path.join(extensionPath, 'server');
+    let port = SERVER_PORT;
 
-    // Python 실행 명령어 우선순위
-    const pythonCommands = [
-        // 1. 사용자 환경별 특정 경로 (필요시 추가)
-        'C:\\Users\\kksu1\\AppData\\Local\\Microsoft\\WindowsApps\\python.exe',
-        // 2. 일반적인 시스템 PATH
-        'python',
-        'python3',
-        'py'
-    ];
-
-    let cmdIndex = 0;
-    let portIndex = SERVER_PORT;
-
-    function tryStartServer(cmdIndex, port) {
-        if (cmdIndex >= pythonCommands.length) {
-            // Try next port if available
-            if (port < PORT_RANGE_END) {
-                console.log(`All Python commands failed on port ${port}, trying port ${port + 1}`);
-                SERVER_PORT = port + 1;
-                SERVER_URL = `http://127.0.0.1:${SERVER_PORT}`;
-                addSystemMessage(`🔄 포트 ${port}가 사용 중입니다. 포트 ${SERVER_PORT}로 재시도...`);
-                setTimeout(() => tryStartServer(0, SERVER_PORT), 1000);
-            } else {
-                console.log('All ports exhausted. Waiting for manual start.');
-                addSystemMessage('❌ 사용 가능한 포트를 찾을 수 없습니다. 수동으로 서버를 시작해주세요.');
-            }
+    function tryStartServer(port) {
+        if (port > PORT_RANGE_END) {
+            addSystemMessage('❌ 사용 가능한 포트를 찾을 수 없습니다.');
+            isStartingServer = false;
             return;
         }
 
-        const pythonCmd = pythonCommands[cmdIndex];
-        const serverScript = path.join(serverPath, 'server.py');
-
-        console.log(`Attempting to start server with ${pythonCmd} on port ${port} (attempt ${serverStartAttempts}/${MAX_START_ATTEMPTS})`);
+        console.log(`Starting server via batch file on port ${port}...`);
 
         try {
-            const proc = spawn(pythonCmd, [serverScript], {
-                cwd: serverPath,
+            const proc = spawn('cmd.exe', ['/c', batchFile], {
+                cwd: extensionPath,
                 windowsHide: true,
                 env: { ...process.env, SERVER_PORT: port.toString() }
             });
 
-            let stdoutData = '';
-            let stderrData = '';
-            let hasError = false;
+            let serverStarted = false;
 
             proc.stdout.on('data', (data) => {
-                stdoutData += data.toString();
-                console.log(`[Python Server ${port}] ${data}`);
+                const output = data.toString();
+                console.log(`[Server] ${output.trim()}`);
 
-                // Check if server started successfully
-                if (stdoutData.includes('Running on') || stdoutData.includes('서버 시작')) {
-                    console.log(`✅ Server successfully started on port ${port}`);
-                    addSystemMessage(`✅ Python 서버가 포트 ${port}에서 시작되었습니다.`);
-                    serverStartAttempts = 0; // Reset attempts on success
+                if (output.includes('Running on') && !serverStarted) {
+                    serverStarted = true;
+                    console.log(`✅ Server started on port ${port}`);
+                    SERVER_PORT = port;
+                    SERVER_URL = `http://127.0.0.1:${port}`;
+                    updateConnectionStatus(true);
                 }
             });
 
             proc.stderr.on('data', (data) => {
-                stderrData += data.toString();
-                console.log(`[Python Server ${port} Err] ${data}`);
+                const errorOutput = data.toString();
+                console.log(`[Server Err] ${errorOutput.trim()}`);
 
-                // Check for port conflict
-                if (stderrData.includes('Address already in use') ||
-                    stderrData.includes('port is already allocated') ||
-                    stderrData.includes('포트') && stderrData.includes('사용')) {
-                    hasError = true;
-                    console.log(`Port ${port} is in use, will try next port`);
+                // 포트 충돌 감지
+                if (errorOutput.includes('Address already in use') ||
+                    errorOutput.includes('port is already allocated')) {
+                    console.log(`Port ${port} in use, trying ${port + 1}`);
+                    proc.kill();
+                    setTimeout(() => tryStartServer(port + 1), 500);
                 }
             });
 
             proc.on('error', (err) => {
-                console.log(`Failed to start with ${pythonCmd}: ${err.message}`);
-                tryStartServer(cmdIndex + 1, port);
+                console.error(`Failed to start server: ${err.message}`);
+                isStartingServer = false;
+                addSystemMessage(`❌ 서버 시작 실패: ${err.message}`);
             });
 
-            // Set the process reference immediately if spawn succeeds
             pythonProcess = proc;
 
             proc.on('close', (code) => {
                 pythonProcess = null;
-
-                if (code !== 0) {
-                    if (hasError || stderrData.includes('Address already in use')) {
-                        // Port conflict, try next port
-                        if (port < PORT_RANGE_END) {
-                            SERVER_PORT = port + 1;
-                            SERVER_URL = `http://127.0.0.1:${SERVER_PORT}`;
-                            console.log(`Port conflict detected, trying port ${SERVER_PORT}`);
-                            setTimeout(() => tryStartServer(0, SERVER_PORT), 500);
-                        } else {
-                            console.log('All ports exhausted');
-                            addSystemMessage('❌ 사용 가능한 포트를 찾을 수 없습니다.');
-                        }
-                    } else {
-                        // Other error, try next Python command
-                        console.log(`Python command exited with code ${code}, trying next command`);
-                        tryStartServer(cmdIndex + 1, port);
-                    }
-                } else {
-                    // Server exited cleanly, might need restart
-                    console.log('Server process exited cleanly');
-                    setTimeout(() => {
-                        if (!pythonProcess) startPythonServer();
-                    }, 2000);
+                if (code !== 0 && code !== null && !serverStarted) {
+                    console.log(`Server exited with code ${code}, trying next port`);
+                    setTimeout(() => tryStartServer(port + 1), 500);
                 }
             });
 
         } catch (e) {
-            console.log(`Exception starting with ${pythonCmd}: ${e.message}`);
-            tryStartServer(cmdIndex + 1, port);
+            console.error(`Exception starting server: ${e.message}`);
+            isStartingServer = false;
+            addSystemMessage(`❌ 서버 시작 오류: ${e.message}`);
         }
     }
 
-    tryStartServer(0, SERVER_PORT);
+    tryStartServer(port);
+
 }
 
 // Start polling for connection
@@ -227,22 +277,36 @@ const apiKeyInput = document.getElementById('apiKeyInput');
 
 // API Key Management - Load from config file or localStorage
 function loadApiKey() {
-    // config.json 로드 로직 제거 (보안 강화)
-    // 오직 localStorage에 저장된 키만 사용합니다.
     const savedApiKey = localStorage.getItem('gemini_api_key');
+    const apiSection = document.getElementById('api-section');
+
     if (savedApiKey && savedApiKey.trim() !== '') {
         apiKeyInput.value = savedApiKey;
-        // 마스킹 처리된 키 로그 (보안)
         console.log(`✅ API key loaded from localStorage (Starts with: ${savedApiKey.substring(0, 4)}...)`);
+
+        // API 키가 있으면 섹션을 접음
+        if (apiSection) {
+            apiSection.classList.add('collapsed');
+        }
     } else {
         console.log('⚠️ No API key found. Please enter your Gemini API key.');
-        // 키가 없으면 입력창을 펼쳐서 보여줌
-        document.getElementById('api-section').classList.remove('collapsed');
-        apiKeyInput.focus();
+
+        // API 키가 없으면 섹션을 펼침
+        if (apiSection) {
+            apiSection.classList.remove('collapsed');
+        }
+
+        // 입력창에 포커스
+        setTimeout(() => {
+            if (apiKeyInput) apiKeyInput.focus();
+        }, 200);
     }
 }
 
-loadApiKey();
+// DOM이 완전히 로드된 후 API 키 로드
+setTimeout(() => {
+    loadApiKey();
+}, 100);
 
 apiKeyInput.addEventListener('change', () => {
     localStorage.setItem('gemini_api_key', apiKeyInput.value);
@@ -313,26 +377,28 @@ function parseMarkdown(text) {
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
 
-    // 2. Bold (**text**)
-    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    // 2. Headers (먼저 처리 - 줄 단위)
+    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+    html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
 
-    // 3. Italic (*text*)
-    html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
-
-    // 4. Headers (### text)
-    html = html.replace(/^### (.*$)/gm, '<h3>$1</h3>');
-    html = html.replace(/^## (.*$)/gm, '<h2>$1</h2>');
-    html = html.replace(/^# (.*$)/gm, '<h1>$1</h1>');
-
-    // 5. Unordered List (- item)
-    // 간단하게 - 로 시작하는 줄을 감지하되, 리스트 태그(ul)로 감싸는 건 복잡하므로 
-    // 그냥 bullet point 문자로 치환하고 줄바꿈 처리
-    html = html.replace(/^- (.*$)/gm, '• $1');
-
-    // 6. Horizontal Rule (---)
+    // 3. Horizontal Rule
     html = html.replace(/^---$/gm, '<hr>');
 
-    // 7. Line breaks (\n)
+    // 4. Bold (**text**) - 이스케이프된 `*`가 아닌지 확인
+    html = html.replace(/\*\*([^\*]+)\*\*/g, '<strong>$1</strong>');
+
+    // 5. Italic (*text*) - Bold와 겹치지 않도록 주의
+    // Bold 이후에 처리하되, **로 둘러싸이지 않은 단일 *만 매칭
+    html = html.replace(/(?<!\*)\*([^\*]+)\*(?!\*)/g, '<em>$1</em>');
+
+    // 6. Unordered List (- item 또는 * item)
+    html = html.replace(/^[\-\*] (.+)$/gm, '• $1');
+
+    // 7. Code inline (`code`)
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+    // 8. Line breaks (\n)
     html = html.replace(/\n/g, '<br>');
 
     return html;
@@ -646,7 +712,10 @@ window.toggleCodePreview = function (headerElement) {
 sendBtn.addEventListener('click', async () => {
     // 1. 서버 연결 확인
     if (!isServerConnected) {
-        addSystemMessage('⚠️ Python 서버와 연결되지 않았습니다. 잠시만 기다려주세요.');
+        // 이미 경고 메시지가 있거나 시작 중이면 추가 메시지 띄우지 않음
+        if (!document.querySelector('.server-connecting') && !isStartingServer) {
+            addSystemMessage('⚠️ Python 서버와 연결되지 않았습니다. 잠시만 기다려주세요.');
+        }
         checkServerConnection(); // 즉시 재확인
         return;
     }

@@ -2,167 +2,221 @@ import requests
 from bs4 import BeautifulSoup
 import os
 import re
+import json
 from urllib.parse import urljoin, urlparse
 
 class ProductCrawler:
     def __init__(self):
         self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9,ko;q=0.8'
         }
 
     def crawl_page(self, url, temp_dir):
         """
         URL에서 제품 정보(이미지, 텍스트)를 추출하여 다운로드합니다.
+        Shopify JSON-LD 및 메타 태그를 우선적으로 사용합니다.
         """
+        print(f"[Crawler] Accessing URL: {url}")
+        
         try:
-            response = requests.get(url, headers=self.headers, timeout=10)
+            response = requests.get(url, headers=self.headers, timeout=15)
             response.raise_for_status()
             
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            # 1. 정보 추출
-            title = self._extract_title(soup)
-            description = self._extract_description(soup)
-            price = self._extract_price(soup)
+            # 데이터 컨테이너 초기화
+            product_data = {
+                "title": "",
+                "description": "",
+                "price": "",
+                "images": []
+            }
+
+            # 1. JSON-LD 파싱 (가장 정확함)
+            self._extract_from_json_ld(soup, product_data)
             
-            # 2. 이미지 추출 및 다운로드
-            images = self._extract_images(soup, url, temp_dir)
+            # 2. 부족한 정보 Fallback (Meta tag, HTML parsing)
+            if not product_data["title"]:
+                product_data["title"] = self._extract_title(soup)
+            
+            if not product_data["description"]:
+                product_data["description"] = self._extract_description(soup)
+                
+            if not product_data["price"]:
+                product_data["price"] = self._extract_price(soup)
+                
+            # 3. 이미지 추출 및 다운로드
+            # JSON-LD에 이미지가 있으면 그것을 우선, 없으면 HTML에서 추출
+            if not product_data["images"]:
+                image_urls = self._extract_image_urls_from_html(soup, url)
+            else:
+                image_urls = product_data["images"]
+                # HTML에서도 추가로 찾아봄 (JSON-LD에 썸네일만 있는 경우 대비)
+                extra_urls = self._extract_image_urls_from_html(soup, url)
+                for u in extra_urls:
+                    if u not in image_urls:
+                        image_urls.append(u)
+
+            # 이미지 다운로드 수행
+            saved_paths = self._download_images(image_urls, temp_dir)
+            
+            print(f"[Crawler] Success! Title: {product_data['title']}, Images: {len(saved_paths)}")
             
             return {
                 "status": "success",
-                "title": title,
-                "description": description,
-                "price": price,
-                "images": images  # 로컬 파일 경로 리스트
+                "title": product_data["title"],
+                "description": product_data["description"],
+                "price": product_data["price"],
+                "images": saved_paths  # 로컬 파일 경로 리스트
             }
             
         except requests.exceptions.RequestException as e:
+            print(f"[Crawler] Network Error: {e}")
             return {"status": "error", "message": f"네트워크 오류: {str(e)}"}
         except Exception as e:
+            print(f"[Crawler] Error: {e}")
             return {"status": "error", "message": f"크롤링 오류: {str(e)}"}
 
-    def _extract_title(self, soup):
-        # 1. 아모레몰/Shopify 전용 선택자 우선
-        selectors = [
-            'h1.product__title',        # Shopify standard
-            'h1.product-single__title', # Shopify standard
-            '.product-meta__title',     # 테마 변형
-            'h1'                        # Fallback
-        ]
-        
-        for selector in selectors:
-            tag = soup.select_one(selector)
-            if tag:
-                return tag.get_text(strip=True)
+    def _extract_from_json_ld(self, soup, data):
+        """JSON-LD 스크립트 태그에서 제품 정보를 찾습니다."""
+        scripts = soup.find_all('script', type='application/ld+json')
+        for script in scripts:
+            try:
+                content = json.loads(script.string)
+                # 단일 객체거나 리스트일 수 있음
+                if isinstance(content, list):
+                    items = content
+                else:
+                    items = [content]
                     
-        return soup.title.string if soup.title else "제목 없음"
+                for item in items:
+                    if item.get('@type') == 'Product':
+                        # 제목
+                        if not data["title"] and item.get('name'):
+                            data["title"] = item['name']
+                        
+                        # 설명
+                        if not data["description"] and item.get('description'):
+                            data["description"] = item['description'][:600] # 길이 제한가
+                            
+                        # 이미지 (단일 문자열 또는 리스트)
+                        if item.get('image'):
+                            imgs = item['image']
+                            if isinstance(imgs, str):
+                                data["images"].append(imgs)
+                            elif isinstance(imgs, list):
+                                data["images"].extend(imgs)
+                                
+                        # 가격 (offers 내부)
+                        if not data["price"] and item.get('offers'):
+                            offers = item['offers']
+                            if isinstance(offers, list):
+                                offers = offers[0]
+                            if isinstance(offers, dict):
+                                price = offers.get('price')
+                                currency = offers.get('priceCurrency', 'KRW')
+                                if price:
+                                    data["price"] = f"{price} {currency}"
+                                    
+            except json.JSONDecodeError:
+                continue
+            except Exception as e:
+                print(f"[Crawler] JSON-LD parse warning: {e}")
+                continue
+
+    def _extract_title(self, soup):
+        selectors = ['h1.product__title', 'h1.product-single__title', '.product-meta__title', 'h1']
+        for sel in selectors:
+            tag = soup.select_one(sel)
+            if tag: return tag.get_text(strip=True)
+        return soup.title.string if soup.title else "Untitled Product"
 
     def _extract_description(self, soup):
-        # 1. 아모레몰 상세 설명 영역
-        selectors = [
-            '.product__description',    # Shopify standard
-            '.product-single__description',
-            '.rte',                     # Rich Text Editor content
-            'meta[name="description"]'
-        ]
-        
-        for selector in selectors:
-            if 'meta' in selector:
-                tag = soup.select_one(selector)
-                if tag and tag.get('content'):
-                    return tag['content'].strip()
+        selectors = ['.product__description', '.product-single__description', '.rte', 'meta[name="description"]']
+        for sel in selectors:
+            if 'meta' in sel:
+                tag = soup.select_one(sel)
+                if tag and tag.get('content'): return tag['content'].strip()
             else:
-                tag = soup.select_one(selector)
-                if tag:
-                    # 설명이 너무 길면 앞부분만 자름 (Gemini Context 제한 고려)
-                    return tag.get_text(strip=True)[:500] + "..."
-            
+                tag = soup.select_one(sel)
+                if tag: return tag.get_text(strip=True)[:500]
         return ""
 
     def _extract_price(self, soup):
-        # 1. 아모레몰 가격 (할인가 우선)
-        selectors = [
-            '.price-item--sale',        # Shopify standard (할인가)
-            '.price-item--regular',     # Shopify standard (정가)
-            '.price__sale .price-item',
-            '.product__price',
-            '[data-product-price]'
-        ]
-        
-        for selector in selectors:
-            tag = soup.select_one(selector)
-            if tag:
-                return tag.get_text(strip=True)
+        selectors = ['.price-item--sale', '.price-item--regular', '[data-product-price]']
+        for sel in selectors:
+            tag = soup.select_one(sel)
+            if tag: return tag.get_text(strip=True)
         return ""
 
-    def _extract_images(self, soup, base_url, temp_dir):
-        """이미지를 찾아 다운로드하고 로컬 경로 리스트 반환"""
-        image_urls = []
-        saved_paths = []
+    def _extract_image_urls_from_html(self, soup, base_url):
+        urls = []
         
-        # 1. 대표 이미지 (OG Image) - 가장 고화질일 확률 높음
-        og_img = soup.select_one('meta[property="og:image"]')
-        if og_img and og_img.get('content'):
-            image_urls.append(og_img['content'])
+        # 1. OG Image
+        og = soup.select_one('meta[property="og:image"]')
+        if og and og.get('content'):
+            urls.append(og['content'])
             
-        # 2. 제품 상세 이미지 (Shopify 썸네일/메인 이미지)
-        # 보통 .product__media-item img 또는 .product-single__media img
-        media_selectors = [
-            '.product__media img', 
-            '.product-single__media img',
-            '.product-gallery__image'
-        ]
-        
-        for selector in media_selectors:
-            for img in soup.select(selector):
-                src = img.get('src') or img.get('data-src') or img.get('data-srcset')
-                if not src: continue
+        # 2. Media selectors
+        for img in soup.select('.product__media img, .product-single__media img, .product-gallery__img'):
+            src = img.get('src') or img.get('data-src') or img.get('data-srcset')
+            if src:
+                # Shopify URL cleanup ('//cdn...' -> 'https://cdn...')
+                if src.startswith('//'): src = 'https:' + src
+                # Remove size suffixes to get original (e.g., _small.jpg -> .jpg)
+                clean_src = re.sub(r'_(small|compact|medium|large|1024x1024)', '', src)
+                urls.append(urljoin(base_url, clean_src))
                 
-                # Shopify CDN URL 보정 (//cdn.shopify.com... -> https://cdn...)
-                if src.startswith('//'):
-                    src = 'https:' + src
-                
-                # 썸네일(_small, _compact 등) 대신 원본(_original, _1024x1024) 유추 시도
-                # (일단은 원본 URL 그대로 수집하되, 중복 제거)
-                
-                full_url = urljoin(base_url, src)
-                if full_url not in image_urls:
-                    image_urls.append(full_url)
-        
-        # 3. Fallback: 본문의 큰 이미지
-        if not image_urls:
+        # 3. Fallback to all large images
+        if len(urls) < 2:
             for img in soup.select('img'):
                 src = img.get('src')
-                if not src: continue
-                if src.startswith('//'): src = 'https:' + src
-                full_url = urljoin(base_url, src)
-                if full_url not in image_urls:
-                    image_urls.append(full_url)
+                if src and 'product' in src and not src.endswith('.gif'): # 필터링 강화
+                    if src.startswith('//'): src = 'https:' + src
+                    urls.append(urljoin(base_url, src))
+                    
+        return list(set(urls)) # 중복 제거
 
-        # 다운로드 (최대 5개)
+    def _download_images(self, urls, temp_dir):
+        saved = []
         count = 0
-        for i, img_url in enumerate(image_urls[:5]):
+        MAX_IMAGES = 5
+        
+        # 다운로드 폴더 생성
+        if not os.path.exists(temp_dir):
+            os.makedirs(temp_dir)
+            
+        for url in urls:
+            if count >= MAX_IMAGES: break
+            
+            # URL 정리 (Query string 제거)
+            clean_url = url.split('?')[0]
+            if not clean_url.startswith('http'): continue
+            
             try:
-                # 쿼리스트링 제거 (?v=...)
-                clean_url = img_url.split('?')[0]
-                ext = os.path.splitext(clean_url)[1]
-                if not ext: ext = '.jpg'
-                
-                filename = f"product_img_{i}{ext}"
+                # 확장자 추출 fallback
+                ext = os.path.splitext(clean_url)[1].lower()
+                if ext not in ['.jpg', '.jpeg', '.png', '.webp']:
+                    ext = '.jpg'
+                    
+                filename = f"product_img_{count}{ext}"
                 filepath = os.path.join(temp_dir, filename)
                 
-                # 다운로드
-                img_data = requests.get(img_url, headers=self.headers, timeout=5).content
+                print(f"[Crawler] Downloading: {url}")
+                img_data = requests.get(url, headers=self.headers, timeout=10).content
+                
                 with open(filepath, 'wb') as f:
                     f.write(img_data)
-                    
-                saved_paths.append(filepath)
+                
+                saved.append(filepath)
                 count += 1
                 
             except Exception as e:
-                print(f"[Warning] 이미지 다운로드 실패 ({img_url}): {e}")
+                print(f"[Crawler] Image download failed: {e}")
                 
-        return saved_paths
+        return saved
 
 # 전역 인스턴스
 crawler_instance = ProductCrawler()

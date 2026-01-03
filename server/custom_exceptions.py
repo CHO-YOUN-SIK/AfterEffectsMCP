@@ -8,16 +8,16 @@ class AppError(Exception):
 
 class GeminiAPIError(AppError):
     """Gemini API 호출 중 발생하는 일반적인 에러"""
-    def __init__(self, message, details=None):
-        super().__init__(message, details, status_code=502)
+    def __init__(self, message, details=None, status_code=502):
+        super().__init__(message, details, status_code=status_code)
 
 class QuotaExceededError(GeminiAPIError):
     """API 사용량 한도 초과 (429)"""
-    def __init__(self, message="API 사용량 한도를 초과했습니다.", details=None):
+    def __init__(self, message="API 사용량 한도를 초과했습니다.", details=None, status_code=429):
         super().__init__(
             message, 
             details=details or "잠시 후 다시 시도해주세요. (약 30초~1분 대기)",
-            status_code=429
+            status_code=status_code
         )
 
 class AuthenticationError(AppError):

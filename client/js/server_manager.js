@@ -136,14 +136,26 @@ async function startPythonServer(initialPort) {
 
     // Node.js child_process를 사용한 직접 실행 (CEP에서 지원)
     try {
-        const batPath = path.join(extensionPath, 'start_server.bat');
-        addLog(`📄 배치 파일: ${batPath}`);
+        const venvPython = path.join(extensionPath, '.venv', 'Scripts', 'python.exe');
+        const scriptPath = path.join(extensionPath, 'server', 'server.py');
 
-        // Node.js child_process로 배치 파일 실행
-        const serverProcess = spawn('cmd.exe', ['/c', batPath], {
+        let pythonPath = venvPython;
+        if (!fs.existsSync(venvPython)) {
+            addLog(`⚠️ 가상환경 Python을 찾지 못했습니다.`);
+            addLog(`🔄 시스템 기본 'python' 명령어로 실행을 시도합니다.`);
+            pythonPath = 'python';
+        } else {
+            addLog(`✅ Python 실행 파일 확인: ${venvPython}`);
+        }
+
+        addLog(`📄 서버 스크립트: ${scriptPath}`);
+
+        // Python을 직접 실행 (배치 파일 우회)
+        const serverProcess = spawn(pythonPath, [scriptPath], {
+            cwd: extensionPath,  // 작업 디렉토리 설정
             detached: true,      // 백그라운드 실행
             stdio: 'ignore',     // 출력 무시
-            windowsHide: true    // 콘솔 창 숨김 (Windows만)
+            env: process.env     // 환경 변수 상속
         });
 
         // 패널 종료 시에도 서버 계속 실행

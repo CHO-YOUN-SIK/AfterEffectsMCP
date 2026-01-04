@@ -4,6 +4,7 @@ import re
 from custom_exceptions import GeminiAPIError, QuotaExceededError, AuthenticationError
 
 import os
+import PIL.Image
 
 # 전역 시스템 프롬프트 정의 (파일에서 로드)
 SYSTEM_INSTRUCTION = ""
@@ -66,10 +67,6 @@ class GeminiService:
             code += '\napp.endUndoGroup();'
             
         return code
-
-import PIL.Image
-
-# ... (기존 import 유지)
 
     def process_chat(self, user_prompt, history, api_key, image_paths=None):
         """채팅 요청 처리 및 응답 포맷팅 (멀티모달 지원)"""

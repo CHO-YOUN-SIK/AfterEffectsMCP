@@ -3,7 +3,25 @@ const path = require('path');
 const { spawn, exec } = require('child_process');
 
 // CSInterface 인스턴스 초기화 (AE 경로 통신용)
-const csInterface = new CSInterface();
+// CSInterface 인스턴스 초기화 (안전 모드)
+let csInterface;
+try {
+    if (typeof CSInterface !== 'undefined') {
+        csInterface = new CSInterface();
+    } else {
+        throw new Error("CSInterface globally undefined");
+    }
+} catch (e) {
+    console.warn("CSInterface Init Failed:", e);
+    // Fallback Mock for Browser/Debug
+    csInterface = {
+        getSystemPath: () => {
+            // Fallback: 현재 작업 디렉토리 추정 (Node.js) 혹은 임의 경로
+            return window.location ? window.location.pathname : '';
+        },
+        evalScript: (s) => console.log("[EvalScript Mock]", s)
+    };
+}
 
 // ==================== Configuration & State ====================
 let SERVER_PORT = 5000;
@@ -52,8 +70,13 @@ async function findOrStartServer() {
         }
     }
 
-    addLog('활성 서버 없음. 새로 시작합니다.');
-    startPythonServer(); // await 없이 호출 (비동기 처리)
+    // 서버 못 찾음 → 수동 실행 안내
+    addLog('❌ 실행 중인 서버를 찾을 수 없습니다.');
+    addLog('📌 해결 방법:');
+    addLog('   1. 프로젝트 폴더를 엽니다.');
+    addLog('   2. start_server.bat 파일을 더블 클릭합니다.');
+    addLog('   3. 서버가 뜨면 이 패널을 새로고침하세요.');
+    updateConnectionStatus(false);
 }
 
 // 파이썬 서버 시작 (재귀적 포트 탐색 포함)
@@ -86,16 +109,17 @@ async function startPythonServer(initialPort) {
         return;
     }
 
-    const pythonPath = path.join(extensionPath, '.venv', 'Scripts', 'python.exe');
+    const venvPython = path.join(extensionPath, '.venv', 'Scripts', 'python.exe');
     const scriptPath = path.join(extensionPath, 'server', 'server.py');
+    let pythonPath = venvPython;
 
-    if (!fs.existsSync(pythonPath)) {
-        addLog(`❌ Python 실행 파일을 찾을 수 없습니다.`);
-        addLog(`경로: ${pythonPath}`);
-        addSystemMessage('Python 가상환경(.venv)이 손상되었거나 없습니다.');
-        isStartingServer = false;
-        lastServerStartTime = 0;
-        return;
+    if (!fs.existsSync(venvPython)) {
+        addLog(`⚠️ 가상환경 Python을 찾지 못했습니다.`);
+        addLog(`경로: ${venvPython}`);
+        addLog(`🔄 시스템 기본 'python' 명령어로 실행을 시도합니다.`);
+        pythonPath = 'python';
+    } else {
+        addLog(`✅ Python 실행 파일 확인됨.`);
     }
 
     // 2. 서버 실행
@@ -108,103 +132,76 @@ async function startPythonServer(initialPort) {
         return;
     }
 
-    addLog(`🔥 서버 프로세스 시작 (Port ${port})...`);
+    addLog(`🔥 서버 시작 시도 (Port ${port})...`);
 
-    let checkInterval = null;
-
+    // CEP 환경 제약 우회: ExtendScript를 통한 시스템 명령 실행
     try {
-        const serverProcess = spawn(pythonPath, [scriptPath], {
-            cwd: extensionPath,
-            env: { ...process.env, SERVER_PORT: port.toString(), PYTHONUNBUFFERED: '1' }
-        });
+        const batPath = path.join(extensionPath, 'start_server.bat');
+        addLog(`📄 배치 파일: ${batPath}`);
 
-        pythonProcess = serverProcess;
-
-        const handlePortConflict = (msg) => {
-            if (msg.includes('Address already in use') || msg.includes('port is already allocated')) {
-                addLog(`⚠️ 포트 ${port} 사용 중. 500ms 후 포트 ${port + 1} 시도...`);
-
-                if (checkInterval) clearInterval(checkInterval);
-
-                try { serverProcess.kill(); } catch (e) { }
-                setTimeout(() => startPythonServer(port + 1), 500);
-                return true;
-            }
-            return false;
-        };
-
-        serverProcess.stdout.on('data', (data) => {
-            const str = data.toString();
-            if (handlePortConflict(str)) return;
-
-            if (str.includes('Running on') || str.includes('Starting') || str.includes('Error')) {
-                addLog(`[Server] ${str.trim()}`);
-            }
-        });
-
-        serverProcess.stderr.on('data', (data) => {
-            const str = data.toString();
-            if (handlePortConflict(str)) return;
-            addLog(`[Error] ${str.trim()}`);
-        });
-
-        serverProcess.on('close', (code) => {
-            if (pythonProcess === serverProcess) {
-                pythonProcess = null;
-                // 마지막 비상구: 포트 범위 끝이면 시작 상태 해제
-                if (port >= PORT_RANGE_END) {
-                    isStartingServer = false;
-                    lastServerStartTime = 0;
+        // ExtendScript 코드: system.callSystem()으로 배치 파일 실행
+        const escapedPath = batPath.replace(/\\/g, '\\\\');
+        const jsxCode = `
+            (function() {
+                try {
+                    var batFile = "${escapedPath}";
+                    var result = system.callSystem('cmd /c "' + batFile + '"');
+                    return "Server start command sent. Result: " + result;
+                } catch(e) {
+                    return "Error: " + e.toString();
                 }
-            }
+            })();
+        `;
+
+        csInterface.evalScript(jsxCode, function (response) {
+            addLog(`[AE Script Response] ${response}`);
         });
 
-        serverProcess.on('error', (err) => {
-            addLog(`❌ 프로세스 실행 에러: ${err.message}`);
-            isStartingServer = false;
-            lastServerStartTime = 0;
-        });
+        addLog('✅ 서버 시작 명령을 After Effects로 전송했습니다.');
+        addLog('⏱️ 서버가 켜지는 동안 잠시 기다립니다...');
 
-        // 3. 서버 생존 확인 폴링
-        let attempts = 0;
-        const maxAttempts = 30;
-
-        checkInterval = setInterval(async () => {
-            attempts++;
-            const isAlive = await checkHealth(`http://127.0.0.1:${port}`);
-
-            if (isAlive) {
-                addLog(`✅ 서버 연결 성공 (Port ${port})!`);
-                clearInterval(checkInterval);
-
-                SERVER_PORT = port;
-                SERVER_URL = `http://127.0.0.1:${port}`;
-                updateConnectionStatus(true);
-                // 성공 시 플래그 해제
-                isStartingServer = false;
-                lastServerStartTime = 0; // 성공했으므로 초기화
-
-            } else if (attempts >= maxAttempts) {
-                clearInterval(checkInterval);
-                addLog(`❌ 포트 ${port} 연결 시간 초과 (15초).`);
-
-                if (port < PORT_RANGE_END) {
-                    addLog(`➡️ 다음 포트(${port + 1})로 넘어갑니다...`);
-                    try { serverProcess.kill(); } catch (e) { }
-                    startPythonServer(port + 1);
-                } else {
-                    addSystemMessage('서버 실행에 실패했습니다.');
-                    isStartingServer = false;
-                    lastServerStartTime = 0;
-                }
-            }
-        }, 500);
-
-    } catch (e) {
-        addLog(`❌ 프로세스 스폰 에러: ${e.message}`);
+    } catch (err) {
+        addLog(`❌ 서버 시작 실패: ${err.message}`);
+        addLog(`👉 수동 해결: start_server.bat 파일을 직접 실행하세요.`);
         isStartingServer = false;
         lastServerStartTime = 0;
+        return;
     }
+
+    // 3. 서버 생존 확인 폴링
+    let attempts = 0;
+    const maxAttempts = 60; // 30초 대기
+
+    checkInterval = setInterval(async () => {
+        attempts++;
+        const isAlive = await checkHealth(`http://127.0.0.1:${port}`);
+
+        if (isAlive) {
+            addLog(`✅ 서버 연결 성공 (Port ${port})!`);
+            clearInterval(checkInterval);
+
+            SERVER_PORT = port;
+            SERVER_URL = `http://127.0.0.1:${port}`;
+            updateConnectionStatus(true);
+            // 성공 시 플래그 해제
+            isStartingServer = false;
+            lastServerStartTime = 0; // 성공했으므로 초기화
+
+        } else if (attempts >= maxAttempts) {
+            clearInterval(checkInterval);
+            addLog(`❌ 포트 ${port} 연결 시간 초과 (15초).`);
+
+            if (port < PORT_RANGE_END) {
+                addLog(`➡️ 다음 포트(${port + 1})로 넘어갑니다...`);
+                // ExtendScript 방식에서는 프로세스 직접 제어 불가
+                startPythonServer(port + 1);
+            } else {
+                addSystemMessage('서버 실행에 실패했습니다.');
+                isStartingServer = false;
+                lastServerStartTime = 0;
+            }
+        }
+    }, 500);
 }
 
 // 서버 연결 감시 (주기적 실행)

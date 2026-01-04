@@ -31,48 +31,47 @@ let abortController = null;
 window.onload = function () {
     console.log('AfterEffectsMCP Initializing...');
 
-    // 0. 강제 모달 오픈 (패널 켜자마자)
-    if (window.openSetupModal) {
-        window.openSetupModal();
-    } else {
-        setTimeout(() => { if (window.openSetupModal) window.openSetupModal(); }, 100);
-    }
-
-    // UI 요소 참조
-    const promptInput = document.getElementById('promptInput');
-    const sendBtn = document.getElementById('sendBtn');
-    const attachBtn = document.getElementById('attachBtn');
-    const fileInput = document.getElementById('fileInput');
-
-    // 모달 버튼 리스너 바인딩 (안전장치)
-    const modalStartBtn = document.getElementById('modal-start-btn');
-    if (modalStartBtn) {
-        modalStartBtn.onclick = handleSetupComplete; // 명시적 바인딩
-    }
-
-    // 이벤트 리스너: 전송
-    sendBtn.addEventListener('click', handleSendMessage);
-
-    // 이벤트 리스너: 엔터키
-    promptInput.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSendMessage();
-        }
-    });
-
-    // 이벤트 리스너: 파일 첨부
-    attachBtn.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', handleFileSelect);
-
-    // .env 파일에서 API 키 로드 시도 (옵션)
-    loadApiKeyFromEnv();
-
-    // 초기 서버 연결 시작 (즉시)
+    // 1. 서버 연결 (자동 실행은 CEP 제약으로 비활성화)
     setTimeout(() => {
-        addLog('System: 초기화 완료. 서버 연결 루프 시작.');
-        checkServerConnection();
-    }, 100);
+        addLog('System: 서버 검색 중...');
+        addLog('⚠️ 서버가 보이지 않으면 프로젝트 폴더의 start_server.bat을 실행하세요.');
+
+        if (typeof checkServerConnection === 'function') {
+            checkServerConnection();
+        } else {
+            addLog('❌ checkServerConnection 함수가 없습니다.');
+        }
+    }, 50);
+
+    // 2. 설정 모달은 ui_manager.js의 서버 연결 성공 콜백에서 실행됩니다.
+
+    // 3. UI 이벤트 리스너
+    try {
+        const promptInput = document.getElementById('promptInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const attachBtn = document.getElementById('attachBtn');
+        const fileInput = document.getElementById('fileInput');
+
+        if (sendBtn) sendBtn.addEventListener('click', handleSendMessage);
+
+        if (promptInput) {
+            promptInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                }
+            });
+        }
+
+        if (attachBtn && fileInput) {
+            attachBtn.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', handleFileSelect);
+        }
+    } catch (e) {
+        console.error("Event listener binding failed:", e);
+    }
+
+    try { loadApiKeyFromEnv(); } catch (e) { }
 };
 
 // ==================== Event Handlers ====================

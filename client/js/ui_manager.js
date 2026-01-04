@@ -1,4 +1,5 @@
 // ==================== UI Manager ====================
+let isFirstConnection = true;
 
 // 전역 UI 요소 참조 헬퍼
 function getChatContainer() {
@@ -26,6 +27,34 @@ function updateConnectionStatus(isConnected) {
     if (statusText) {
         statusText.textContent = isConnected ? '연결됨' : '연결 끊김';
         statusText.style.color = isConnected ? '#4caf50' : '#666';
+    }
+
+    // [New] 최초 연결 시 로딩 화면 제거 -> 설정창 오픈
+    if (isConnected && isFirstConnection) {
+        isFirstConnection = false;
+
+        const splash = document.getElementById('splash-screen');
+        if (splash) {
+            // 성공 메시지로 변경 후 잠시 대기
+            const h3 = splash.querySelector('h3');
+            if (h3) {
+                h3.innerText = '✅ 서버 연결 성공!';
+                h3.style.color = '#4caf50';
+            }
+            const statusDiv = document.getElementById('splash-status');
+            if (statusDiv) statusDiv.innerText = '설정 화면으로 이동합니다...';
+
+            setTimeout(() => {
+                splash.style.opacity = '0';
+                splash.style.transition = 'opacity 0.6s ease';
+
+                setTimeout(() => {
+                    splash.style.display = 'none';
+                    // 여기서 모달 오픈!
+                    if (window.openSetupModal) window.openSetupModal();
+                }, 600);
+            }, 800);
+        }
     }
 }
 

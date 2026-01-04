@@ -8,6 +8,29 @@ function addLog(message) {
         logBox.innerHTML += `\n[${timestamp}] ${message}`;
         logBox.scrollTop = logBox.scrollHeight;
     }
+
+    // 로딩 화면에도 상태 표시
+    const splashStatus = document.getElementById('splash-status');
+    if (splashStatus) {
+        splashStatus.textContent = message.length > 50 ? message.substring(0, 50) + '...' : message;
+        // 에러 메시지면 빨간색
+        if (message.includes('Error') || message.includes('실패') || message.includes('failed')) {
+            splashStatus.style.color = '#f85149';
+        } else {
+            splashStatus.style.color = '#888';
+        }
+    }
+
+    // 🆕 파일 로깅 (디버그용)
+    try {
+        const fs = require('fs');
+        const logPath = 'C:/ae_panel_debug.txt';
+        const timestamp = new Date().toISOString();
+        fs.appendFileSync(logPath, `[${timestamp}] ${message}\n`, 'utf8');
+    } catch (fileErr) {
+        // 파일 쓰기 실패해도 패널은 멈추지 않음
+    }
+
     // console.log에도 남김
     console.log(`[Log] ${message}`);
 }

@@ -99,6 +99,20 @@
     <script src="js/ui_manager.js"></script>
     <script src="js/server_manager.js"></script>
     <script src="main.js"></script>
+    <!-- Splash Screen (로딩) -->
+    <div id="splash-screen" class="modal-overlay active"
+        style="z-index: 20000; background:#0f1115; flex-direction:column;">
+        <div class="typing-indicator"
+            style="background:transparent; border:none; transform:scale(1.5); margin-bottom:20px; align-self:center;">
+            <div class="typing-dot" style="background:#0078d4;"></div>
+            <div class="typing-dot" style="background:#0078d4;"></div>
+            <div class="typing-dot" style="background:#0078d4;"></div>
+        </div>
+        <h3 style="color:#fff; font-weight:500; font-size:16px;">서버 시스템 가동 중...</h3>
+        <div id="splash-status" style="color:#666; font-size:12px; margin-top:10px;">Python Environment Initializing
+        </div>
+    </div>
+
     <!-- Setup Modal -->
     <div id="setup-modal" class="modal-overlay">
         <div class="modal-content">
@@ -120,7 +134,7 @@
                 <div class="description-text">분석된 내용과 이미지가 작업에 자동 추가됩니다.</div>
             </div>
 
-            <button id="modal-start-btn" class="modal-btn" onclick="handleSetupComplete()">등록 및 시작</button>
+            <button id="modal-start-btn" class="modal-btn" onclick="window.handleSetupComplete()">등록 및 시작</button>
         </div>
     </div>
 </body>

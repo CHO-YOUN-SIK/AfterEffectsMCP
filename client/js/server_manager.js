@@ -134,31 +134,26 @@ async function startPythonServer(initialPort) {
 
     addLog(`🔥 서버 시작 시도 (Port ${port})...`);
 
-    // CEP 환경 제약 우회: ExtendScript를 통한 시스템 명령 실행
+    // Node.js child_process를 사용한 직접 실행 (CEP에서 지원)
     try {
         const batPath = path.join(extensionPath, 'start_server.bat');
         addLog(`📄 배치 파일: ${batPath}`);
 
-        // ExtendScript 코드: system.callSystem()으로 배치 파일 실행
-        const escapedPath = batPath.replace(/\\/g, '\\\\');
-        const jsxCode = `
-            (function() {
-                try {
-                    var batFile = "${escapedPath}";
-                    var result = system.callSystem('cmd /c "' + batFile + '"');
-                    return "Server start command sent. Result: " + result;
-                } catch(e) {
-                    return "Error: " + e.toString();
-                }
-            })();
-        `;
-
-        csInterface.evalScript(jsxCode, function (response) {
-            addLog(`[AE Script Response] ${response}`);
+        // Node.js child_process로 배치 파일 실행
+        const serverProcess = spawn('cmd.exe', ['/c', batPath], {
+            detached: true,      // 백그라운드 실행
+            stdio: 'ignore',     // 출력 무시
+            windowsHide: true    // 콘솔 창 숨김 (Windows만)
         });
 
-        addLog('✅ 서버 시작 명령을 After Effects로 전송했습니다.');
+        // 패널 종료 시에도 서버 계속 실행
+        serverProcess.unref();
+
+        addLog('✅ 서버 시작 명령 전송 완료 (Node.js child_process)');
         addLog('⏱️ 서버가 켜지는 동안 잠시 기다립니다...');
+
+        // Python 프로세스 참조 저장
+        pythonProcess = serverProcess;
 
     } catch (err) {
         addLog(`❌ 서버 시작 실패: ${err.message}`);
@@ -189,11 +184,11 @@ async function startPythonServer(initialPort) {
 
         } else if (attempts >= maxAttempts) {
             clearInterval(checkInterval);
-            addLog(`❌ 포트 ${port} 연결 시간 초과 (15초).`);
+            addLog(`❌ 포트 ${port} 연결 시간 초과 (30초).`);
 
             if (port < PORT_RANGE_END) {
                 addLog(`➡️ 다음 포트(${port + 1})로 넘어갑니다...`);
-                // ExtendScript 방식에서는 프로세스 직접 제어 불가
+                // 다음 포트로 재시도
                 startPythonServer(port + 1);
             } else {
                 addSystemMessage('서버 실행에 실패했습니다.');

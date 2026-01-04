@@ -18,21 +18,42 @@
 <body>
 
     <!-- Collapsible API Key Section -->
-    <div id="api-section">
-        <div class="api-header" onclick="toggleApiSection()">
-            <div style="display:flex; align-items:center; gap:8px;">
-                <span>🔑 Gemini API Key</span>
-                <span id="server-status-dot" class="status-dot disconnected" title="서버 연결 상태"></span>
-            </div>
-            <span class="api-toggle">▼</span>
+    <!-- Simple Header -->
+    <div class="header-bar"
+        style="display:flex; justify-content:space-between; align-items:center; padding:10px 16px; background:#161b22; border-bottom:1px solid #30363d;">
+        <div style="font-weight:600; font-size:13px; color:#fff;">✨ AfterEffects MCP</div>
+        <div style="display:flex; gap:10px; align-items:center;">
+            <span id="server-status-dot" class="status-dot disconnected" title="서버 상태"></span>
+            <button class="settings-btn" onclick="openSetupModal()" title="설정">⚙️</button>
         </div>
-        <div class="api-content">
-            <label>API Key</label>
-            <div style="display: flex; gap: 10px;">
-                <input type="password" id="apiKeyInput" placeholder="Enter your Gemini API Key..." style="flex: 1;">
-                <button id="testApiBtn" class="api-test-btn" onclick="testApiKey()">테스트</button>
+    </div>
+
+    <!-- Server Status & Logs Section -->
+    <div id="server-status-section"
+        style="margin: 10px 16px; border: 1px solid #333; border-radius: 6px; overflow: hidden;">
+        <div class="section-header" onclick="toggleServerLog()"
+            style="padding: 10px; background: #2a2a2a; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span>🖥️ 서버 상태 로그</span>
             </div>
-            <div id="apiStatus" class="api-status"></div>
+            <span id="server-log-toggle" style="font-size: 12px;">▼</span>
+        </div>
+        <div id="server-log-content" style="display:block; padding: 10px; background: #1e1e1e;">
+            <div id="server-log-box"
+                style="background:#000; color:#00ff00; font-family:'JetBrains Mono', monospace; font-size:11px; padding:8px; height:150px; overflow-y:auto; border:1px solid #333; margin-bottom:8px; white-space:pre-wrap;">
+                [System] 패널이 초기화되었습니다.</div>
+            <div style="display:flex; gap:5px;">
+                <button id="startServerBtn" class="full-width-btn"
+                    style="flex:1; padding:8px; background:#4caf50; color:white; border:none; border-radius:4px; cursor:pointer;"
+                    onclick="findOrStartServer()">
+                    ▶️ 서버 수동 시작
+                </button>
+                <button id="resetServerBtn" class="full-width-btn"
+                    style="flex:1; padding:8px; background:#d32f2f; color:white; border:none; border-radius:4px; cursor:pointer;"
+                    onclick="resetServerProcess()">
+                    🔄 강제 재시작
+                </button>
+            </div>
         </div>
     </div>
 
@@ -43,14 +64,25 @@
             👋 안녕하세요! After Effects 작업을 도와드릴 준비가 되었습니다.
         </div>
     </div>
+    </div>
+
+    <!-- URL Analysis Section -->
+    <!-- URL Analysis Moved to Modal -->
+
+    <!-- File Preview Area -->
+    <div id="file-preview-area" class="file-preview-area"
+        style="display:none; padding: 8px 16px; gap: 8px; flex-wrap: wrap;"></div>
 
     <!-- Input Area -->
     <div id="input-area">
+        <input type="file" id="fileInput" accept="image/*" multiple style="display:none">
+
         <div class="quick-actions">
             <!-- File Upload Button -->
-            <button class="icon-btn" title="파일 첨부" onclick="handleFileUpload()">
+            <button id="attachBtn" class="icon-btn" title="파일 첨부">
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-                    <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
+                    <path
+                        d="M16.5,6V17.5A4,4 0 0,1 12.5,21.5A4,4 0 0,1 8.5,17.5V5A2.5,2.5 0 0,1 11,2.5A2.5,2.5 0 0,1 13.5,5V15.5A1,1 0 0,1 12.5,16.5A1,1 0 0,1 11.5,15.5V6H10V15.5A2.5,2.5 0 0,0 12.5,18A2.5,2.5 0 0,0 15,15.5V5A4,4 0 0,0 11,1A4,4 0 0,0 7,5V17.5A5.5,5.5 0 0,0 12.5,23A5.5,5.5 0 0,0 18,17.5V6H16.5Z" />
                 </svg>
             </button>
         </div>
@@ -63,35 +95,34 @@
     </div>
 
     <script src="../lib/CSInterface.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/ui_manager.js"></script>
+    <script src="js/server_manager.js"></script>
     <script src="main.js"></script>
+    <!-- Setup Modal -->
+    <div id="setup-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 class="modal-title" style="display:flex; align-items:center; width:100%;">
+                🚀 작업 환경 설정
+                <span id="modal-server-status" class="status-dot disconnected"
+                    style="margin-left:auto; width:10px; height:10px;" title="서버 연결 상태"></span>
+            </h2>
 
-    <script>
-        // Toggle API Section
-        function toggleApiSection() {
-            const section = document.getElementById('api-section');
-            section.classList.toggle('collapsed');
-        }
+            <div class="input-group">
+                <label>Gemini API Key</label>
+                <input type="password" id="modal-api-key" placeholder="AI Studio 키를 입력하세요">
+                <div class="description-text">이전에 사용한 키를 자동으로 불러옵니다.</div>
+            </div>
 
-        // Handle Enter key for Textarea
-        const promptInput = document.getElementById('promptInput');
-        promptInput.addEventListener('keydown', function (e) { // changed to keydown from keypress for consistency
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                document.getElementById('sendBtn').click();
-            }
-        });
+            <div class="input-group">
+                <label>참고 URL (선택사항)</label>
+                <input type="text" id="modal-url-input" placeholder="기사, 블로그, 쇼핑몰 링크 등">
+                <div class="description-text">분석된 내용과 이미지가 작업에 자동 추가됩니다.</div>
+            </div>
 
-        // Placeholder for file upload
-        function handleFileUpload() {
-            alert('파일 첨부 기능은 곧 추가됩니다!');
-        }
-
-        // Auto-scroll to bottom when new message arrives (Helper)
-        function scrollToBottom() {
-            const container = document.getElementById('chat-container');
-            container.scrollTop = container.scrollHeight;
-        }
-    </script>
+            <button id="modal-start-btn" class="modal-btn" onclick="handleSetupComplete()">등록 및 시작</button>
+        </div>
+    </div>
 </body>
 
 </html>

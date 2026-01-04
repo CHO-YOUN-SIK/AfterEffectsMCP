@@ -134,14 +134,34 @@ class ProductCrawler:
         return soup.title.string if soup.title else "Untitled Product"
 
     def _extract_description(self, soup):
-        selectors = ['.product__description', '.product-single__description', '.rte', 'meta[name="description"]']
+        # 범용 블로그/기사 본문 셀렉터 추가
+        selectors = [
+            'article', '.article-body', '.post-content', '.entry-content', 
+            '.product__description', '.product-single__description', '.rte', 
+            'meta[name="description"]'
+        ]
+        text_content = ""
+        
         for sel in selectors:
             if 'meta' in sel:
                 tag = soup.select_one(sel)
-                if tag and tag.get('content'): return tag['content'].strip()
+                if tag and tag.get('content'): 
+                    return tag['content'].strip()
             else:
+                # 본문 텍스트 추출 (여러 태그가 걸릴 수 있으므로 가장 내용이 긴 것 선호하거나 다 합침)
+                # 여기서는 첫 번째 매칭되는 본문 컨테이너를 사용
                 tag = soup.select_one(sel)
-                if tag: return tag.get_text(strip=True)[:500]
+                if tag:
+                    text_content = tag.get_text(strip=True)
+                    if len(text_content) > 50: # 너무 짧으면 무시하고 다음 셀렉터 시도
+                        return text_content[:2000] # 길이 제한
+
+        # 못 찾았으면 p 태그들을 긁어모음
+        if not text_content:
+            paragraphs = [p.get_text().strip() for p in soup.find_all('p') if len(p.get_text().strip()) > 30]
+            if paragraphs:
+                return ' '.join(paragraphs)[:2000]
+
         return ""
 
     def _extract_price(self, soup):
@@ -159,30 +179,25 @@ class ProductCrawler:
         if og and og.get('content'):
             urls.append(og['content'])
             
-        # 2. Media selectors
-        for img in soup.select('.product__media img, .product-single__media img, .product-gallery__img'):
-            src = img.get('src') or img.get('data-src') or img.get('data-srcset')
+        # 2. General Images (크기 필터링은 다운로드 시 하면 좋음)
+        for img in soup.find_all('img'):
+            src = img.get('src') or img.get('data-src')
             if src:
-                # Shopify URL cleanup ('//cdn...' -> 'https://cdn...')
-                if src.startswith('//'): src = 'https:' + src
-                # Remove size suffixes to get original (e.g., _small.jpg -> .jpg)
-                clean_src = re.sub(r'_(small|compact|medium|large|1024x1024)', '', src)
-                urls.append(urljoin(base_url, clean_src))
+                # 상대 경로 처리
+                full_url = urljoin(base_url, src)
                 
-        # 3. Fallback to all large images
-        if len(urls) < 2:
-            for img in soup.select('img'):
-                src = img.get('src')
-                if src and 'product' in src and not src.endswith('.gif'): # 필터링 강화
-                    if src.startswith('//'): src = 'https:' + src
-                    urls.append(urljoin(base_url, src))
+                # 필터링
+                if any(x in full_url.lower() for x in ['.svg', 'logo', 'icon', 'button']):
+                    continue
+                urls.append(full_url)
                     
-        return list(set(urls)) # 중복 제거
+        return list(dict.fromkeys(urls)) # 중복 제거 (순서 유지)
 
     def _download_images(self, urls, temp_dir):
         saved = []
         count = 0
         MAX_IMAGES = 5
+        import time
         
         # 다운로드 폴더 생성
         if not os.path.exists(temp_dir):
@@ -191,24 +206,31 @@ class ProductCrawler:
         for url in urls:
             if count >= MAX_IMAGES: break
             
-            # URL 정리 (Query string 제거)
+            # URL 정리
             clean_url = url.split('?')[0]
             if not clean_url.startswith('http'): continue
             
             try:
-                # 확장자 추출 fallback
+                # 확장자 추출
                 ext = os.path.splitext(clean_url)[1].lower()
                 if ext not in ['.jpg', '.jpeg', '.png', '.webp']:
                     ext = '.jpg'
                     
-                filename = f"product_img_{count}{ext}"
+                # 타임스탬프 추가로 덮어쓰기 방지
+                filename = f"crawl_{int(time.time())}_{count}{ext}"
                 filepath = os.path.join(temp_dir, filename)
                 
-                print(f"[Crawler] Downloading: {url}")
-                img_data = requests.get(url, headers=self.headers, timeout=10).content
+                # 이미 존재하면 스킵? 아니면 덮어쓰기 (타임스탬프 있어서 덮어쓸 일 거의 없음)
                 
+                print(f"[Crawler] Downloading: {url}")
+                resp = requests.get(url, headers=self.headers, timeout=10)
+                
+                # 너무 작은 이미지는 무시 (아이콘 등)
+                if len(resp.content) < 5000: # 5KB 미만 무시
+                    continue
+
                 with open(filepath, 'wb') as f:
-                    f.write(img_data)
+                    f.write(resp.content)
                 
                 saved.append(filepath)
                 count += 1

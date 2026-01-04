@@ -149,6 +149,10 @@ function executeCommand(command, args) {
                 result = applyEffectTemplate(args);
                 break;
 
+            case "saveCurrentFrame":
+                result = saveCurrentFrame(args.savePath);
+                break;
+
             default:
                 result = JSON.stringify({
                     status: "error",
@@ -166,6 +170,46 @@ function executeCommand(command, args) {
             message: "Error executing command '" + command + "': " + e.toString()
         });
     }
+}
+
+/**
+ * 현재 컴포지션의 현재 시간을 PNG로 렌더링하여 저장합니다.
+ * @param {string} savePath - 저장할 전체 파일 경로
+ * @returns {string} JSON 결과
+ */
+function saveCurrentFrame(savePath) {
+    var comp = app.project.activeItem;
+    if (!comp || !(comp instanceof CompItem)) {
+        return JSON.stringify({ status: "error", message: "No active composition" });
+    }
+
+    try {
+        var rq = app.project.renderQueue;
+        var renderItem = rq.items.add(comp);
+
+        // 현재 시간의 1프레임만 렌더링
+        renderItem.timeSpanStart = comp.time;
+        renderItem.timeSpanDuration = 0;
+
+        var outputModule = renderItem.outputModule(1);
+        outputModule.file = new File(savePath);
+
+        rq.render();
+
+        if (rq.numItems > 0) {
+            rq.item(rq.numItems).remove();
+        }
+
+        return JSON.stringify({
+            status: "success",
+            message: "Saved frame to " + savePath,
+            path: savePath
+        });
+
+    } catch (e) {
+        return JSON.stringify({ status: "error", message: e.toString() });
+    }
+}
 }
 
 

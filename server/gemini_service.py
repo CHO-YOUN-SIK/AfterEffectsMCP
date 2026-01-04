@@ -3,31 +3,23 @@ import json
 import re
 from custom_exceptions import GeminiAPIError, QuotaExceededError, AuthenticationError
 
-# 전역 시스템 프롬프트 정의
-SYSTEM_INSTRUCTION = """
-당신은 After Effects Scripting(ExtendScript) 전문가이자 친절한 AI 어시스턴트입니다.
-사용자는 After Effects 초보자일 수 있으므로, 전문 용어보다는 쉬운 설명과 직관적인 제안을 선호합니다.
+import os
 
-[핵심 원칙]
-1. **가독성 최우선**: 마크다운, 굵은 글씨, 리스트 사용.
-2. **실행 중심**: "알아서 해줘" -> 즉시 코드 생성.
-3. **초보자 가이드**: 막연한 질문 -> 선택지(옵션) 제공.
-4. **코드 생성 규칙**:
-   - JSON 포맷 준수 (type: code, data.code).
-   - app.beginUndoGroup() 필수 사용.
+# 전역 시스템 프롬프트 정의 (파일에서 로드)
+SYSTEM_INSTRUCTION = ""
+PROMPT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'enhanced_prompt.txt')
 
-[필수 응답 포맷 (JSON)]
-```json
-{
-    "type": "code",
-    "content": "코드 설명...",
-    "data": {
-        "type": "javascript",
-        "code": "// ExtendScript Code..."
-    }
-}
-```
-"""
+try:
+    if os.path.exists(PROMPT_FILE):
+        with open(PROMPT_FILE, 'r', encoding='utf-8') as f:
+            SYSTEM_INSTRUCTION = f.read()
+            print(f"[Gemini] Loaded Enhanced Prompt ({len(SYSTEM_INSTRUCTION)} chars)")
+    else:
+        print("[Gemini] Warning: enhanced_prompt.txt not found. Using minimal fallback.")
+        SYSTEM_INSTRUCTION = "당신은 After Effects 전문가입니다. ExtendScript 코드를 생성하세요."
+except Exception as e:
+    print(f"[Gemini] Error loading prompt: {e}")
+    SYSTEM_INSTRUCTION = "당신은 After Effects 전문가입니다. ExtendScript 코드를 생성하세요."
 
 class GeminiService:
     def __init__(self):
@@ -75,8 +67,12 @@ class GeminiService:
             
         return code
 
-    def process_chat(self, user_prompt, history, api_key):
-        """채팅 요청 처리 및 응답 포맷팅"""
+import PIL.Image
+
+# ... (기존 import 유지)
+
+    def process_chat(self, user_prompt, history, api_key, image_paths=None):
+        """채팅 요청 처리 및 응답 포맷팅 (멀티모달 지원)"""
         self.configure(api_key)
         
         try:
@@ -100,7 +96,20 @@ class GeminiService:
                 })
 
             chat_session = model.start_chat(history=gemini_history)
-            response = chat_session.send_message(user_prompt)
+            
+            # 멀티모달 메시지 구성
+            message_parts = [user_prompt]
+            if image_paths:
+                print(f"[Gemini] Loading {len(image_paths)} images...")
+                for path in image_paths:
+                    try:
+                        img = PIL.Image.open(path)
+                        message_parts.append(img)
+                        print(f"  - Loaded: {path}")
+                    except Exception as e:
+                        print(f"  - Failed to load image {path}: {e}")
+
+            response = chat_session.send_message(message_parts)
             
             return self._parse_response(response.text)
 
